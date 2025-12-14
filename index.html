@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interactive Heart Particles</title>
+<style>
+  body { margin: 0; overflow: hidden; background: #111; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r150/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.4.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/hand-pose-detection"></script>
+
+<script>
+let scene, camera, renderer, particles = [];
+let handX = 0, handY = 0;
+
+// Scene setup
+scene = new THREE.Scene();
+camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+camera.position.z = 5;
+
+renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// Create heart-shaped particles
+const geometry = new THREE.BufferGeometry();
+const particleCount = 2000;
+const positions = new Float32Array(particleCount * 3);
+
+function heartFunction(t) {
+  return [
+    16 * Math.pow(Math.sin(t),3),
+    13 * Math.cos(t) - 5*Math.cos(2*t) - 2*Math.cos(3*t) - Math.cos(4*t)
+  ];
+}
+
+for(let i=0; i<particleCount; i++){
+  let t = Math.random() * Math.PI * 2;
+  let [x, y] = heartFunction(t);
+  positions[i*3] = x * 0.05;
+  positions[i*3+1] = y * 0.05;
+  positions[i*3+2] = 0;
+}
+
+geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+const material = new THREE.PointsMaterial({ color: 0xff4081, size: 0.05 });
+const pointCloud = new THREE.Points(geometry, material);
+scene.add(pointCloud);
+
+// Webcam hand detection
+async function setupHandTracking() {
+  const detector = await handPoseDetection.createDetector(
+    handPoseDetection.SupportedModels.MediaPipeHands,
+    { runtime: 'tfjs', modelType: 'lite' }
+  );
+
+  const video = document.createElement('video');
+  video.autoplay = true;
+  video.width = window.innerWidth;
+  video.height = window.innerHeight;
+  document.body.appendChild(video);
+
+  navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+    video.srcObject = stream;
+  });
+
+  async function detect() {
+    const hands = await detector.estimateHands(video);
+    if(hands.length > 0){
+      handX = (hands[0].keypoints[0].x / video.width - 0.5) * 10;
+      handY = -(hands[0].keypoints[0].y / video.height - 0.5) * 10;
+    }
+    requestAnimationFrame(detect);
+  }
+  detect();
+}
+setupHandTracking();
+
+// Animation loop
+function animate() {
+  requestAnimationFrame(animate);
+  pointCloud.rotation.y += 0.005;
+
+  // Move particles slightly based on hand
+  pointCloud.position.x += (handX - pointCloud.position.x) * 0.05;
+  pointCloud.position.y += (handY - pointCloud.position.y) * 0.05;
+
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
