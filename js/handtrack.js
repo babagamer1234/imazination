@@ -1,11 +1,17 @@
 let video = document.createElement('video');
 video.autoplay = true;
+video.width = 640;
+video.height = 480;
 
 navigator.mediaDevices.getUserMedia({ video: true })
-.then(stream => { video.srcObject = stream; });
+  .then(stream => { video.srcObject = stream; })
+  .catch(err => console.error("Camera access error:", err));
 
 let model;
-handpose.load().then(m => model = m);
+handpose.load().then(m => {
+  model = m;
+  console.log("Handpose model loaded");
+});
 
 async function detectHands(callback) {
   if (model && video.readyState === 4) {
